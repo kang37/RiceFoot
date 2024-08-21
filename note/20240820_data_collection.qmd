@@ -1,0 +1,130 @@
+---
+title: "表格和数据"
+author: "康"
+format: html
+editor: visual
+---
+
+## 引言
+
+基于上一次讨论，提出一些建议和提供一些信息，如果有不同看法或不清楚的地方，可以约时间讨论或者随时留言。
+
+## 表格调整
+
+按照逻辑重排各列的顺序，并且所有列名均以小写字母加下划线形式命名：
+
+ref-文献编号；
+
+res_area-研究地区；
+
+lca-新增列，是否采用了LCA方法；
+
+system-稻米系统；
+
+intervention-干预，因为系统是基础，所以干预排在系统后面；
+
+intervention_detail-干预细节；
+
+area-研究涉及的面积，先随意填写，后面再考虑如何规范化，例如大田试验就写"大田试验面积xx公顷"；
+
+yield-总产量；
+
+yield_int-沿用原来的单位和记录方式，记录单位面积产量；
+
+imp_cat-环境影响类型；
+
+imp_val_abs-环境影响绝对值；
+
+imp_unit-环境影响单位；
+
+imp_val_rel-环境影响绝对值；
+
+memo-其他备注。
+
+环境影响单位：如上所述，"function unit"改为"impact unit"，表达为"环境影响/稻田单位"，如能源消耗可能是"J/kg rice"，碳排放可能是"kg C/kg rice"，注意碳排放单位的前半部分要指明是碳量还是二氧化碳量等；如果能够将它们分成前后两部分各一列就更好了。
+
+## 取值聚合
+
+我统计了一些关键项目的不同取值的数量，需要通过聚合来减少取值数量（例如各种轮作是否都改为\"轮作\"，而把具体的轮作细节写在memo中）；对于聚合后数量仍较少的取值，可以排除在分析之外。
+
+rice system的种类和数量分布如下：
+
+```{r}
+library(knitr)
+library(kableExtra)
+get_freq_col_val("rice_system") %>% 
+  kable() %>% kable_styling()
+```
+
+intervention的种类和数量分布如下：
+
+```{r}
+get_freq_col_val("intervention") %>% 
+  kable() %>% kable_styling()
+```
+
+impact categories的种类和数量分布如下：
+
+```{r}
+get_freq_col_val("impact_categories") %>% 
+  kable() %>% kable_styling()
+```
+
+country的种类和数量分布如下（这个不是那么重要，可以先放着）：
+
+```{r}
+get_freq_col_val("country") %>% 
+  kable() %>% kable_styling()
+```
+
+## 分析
+
+虽然因为关键变量（大米系统、干预、影响种类）还没聚合，导致种类非常多，但是先以GWP100为例，看看不同系统或不同的干预下，GWP100是多少。这也有助于我们考虑有些子类要不要合并，例如，如果两个比较相似的大米系统子类A和B，GWP100的差异却很大，那么可能就不应该合并。
+
+此外，需要注意的是，由于单位尚未统一，所以尽管我们已经将数据限制在GWP100范围内了，但是原数据其实是不太可直接比较的。这部分涉及的单位包括：1 kg of rice，1 kg of rice produced (kgCO2eq)，1 kg of rice grain (kg CO2-eq)，1 ton of rice grain (kg CO2 eq)，1 ton of rice grain (ton CO2 eq)，1 ha of rice-wheat rotation system (kg CO2 eq)，1 kg of refined rice packed (kg CO2 eq.)，1 ton of rice，1 ha of rice-planted area，1 ha of rice (kg CO2 eq)，1 ha of rice，1 ton of rice (14% moisture)。由于1 ton of rice和1 kg of rice最多，所以我只保留以这两个为单位的数据，并且将以\"1 kg of rice\"为单位的数据的环境影响乘以1000，以和\"1 ton of rice\"数据统一。
+
+系统是基础，所以我们先看不同系统下的GWP100：可以看出flooded系统的GWP100本身就比较高，因此在评估干预的影响时，不应该直接拿不同系统的值比较。具体举个例子，不可以直接拿rain fed的有机农业GWP100和flooded的GWP100进行比较。
+
+```{r}
+raw_gwp100 %>%
+  mutate(
+    rice_system = paste0(substr(rice_system, 1, 15), "...")
+  ) %>%
+  ggplot(aes(rice_system, results)) +
+  geom_boxplot() +
+  geom_jitter(aes(col = intervention), alpha = 0.5) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 90),
+    legend.position = "none"
+  )
+```
+
+然后看干预措施下的GWP100：
+
+```{r}
+ggplot(raw_gwp100, aes(intervention, results)) +
+  geom_boxplot() +
+  geom_jitter(aes(col = rice_system), alpha = 0.5) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 90),
+    legend.position = "none"
+  )
+```
+
+## 其他需求
+
+-   有些没写是rain fed还是灌溉，则根据国家来推测：要在备注中，或者另开一栏说明这是推测的还是原文中写的。
+
+-   能否给我一个流程信息，说明一下大米处理不同过程的产品和你的function unit中的词语是如何对应的（grain，rice，rice packed等）。
+
+## 一些问题
+
+-   原表格中的"1_ton_result"列是否可以通过表示环境影响数值的"Result"列计算得到？
+
+-   需要确认"GHG"这种环境影响是否都以"二氧化碳当量"为单位，如果是的话，那么它们一般是按照GWP100标准来计算的。
+
+## 一些回答
+
+-   GWP100和500之间无法直接转化，因为不同温室气体的GWP100和500不同。例如，甲烷GWP100是28-36，和GWP500是7-10，一氧化二氮的GWP100约为273，GWP500约为153。GWP500的结果并不多，所以暂时不是大问题。
